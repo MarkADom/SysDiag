@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# 🧪 SysDiag v1.1.2 - Linux Diagnostics Toolkit (Enhanced with log analysis)
+# 🧪 SysDiag v1.1.4 - Linux Diagnostics Toolkit (Enhanced with log analysis)
 
 LOG_DIR="$HOME/.local/share/sysdiag"
 mkdir -p "$LOG_DIR"
@@ -136,7 +136,7 @@ main() {
   run_test "Network Ping" "ping -c 4 8.8.8.8" true
   run_test "DNS Resolution" "dig +short google.com" true
   run_test "System Logs" "journalctl -b -p 3 | tail -n 20" true
-  run_test "Driver Errors" "dmesg --level=err | grep -iE 'firmware|pci|driver|usb|amdgpu|nvidia|taint' | tail -n 15" true
+  run_test "Driver Errors" "dmesg --level=err 2>&1 | grep -iE 'firmware|pci|driver|usb|amdgpu|nvidia|taint' | tail -n 15 || echo '[!] Permission denied: Try sudo sysctl -w kernel.dmesg_restrict=0'" true
 
   echo ""
   echo "${GREEN}All diagnostics finished.${RESET}"
