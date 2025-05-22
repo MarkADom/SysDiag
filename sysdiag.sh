@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# 🧪 SysDiag v1.1.4 - Linux Diagnostics Toolkit (Enhanced with log analysis)
+# 🧪 SysDiag v1.2.0 - Linux Diagnostics Toolkit (with log analysis, CSV/MD export, and issue summary)
 
 LOG_DIR="$HOME/.local/share/sysdiag"
 mkdir -p "$LOG_DIR"
@@ -8,6 +8,8 @@ DATESTAMP=$(date +%F_%H-%M-%S)
 LOG_FILE="$LOG_DIR/sysdiag_$DATESTAMP.log"
 HTML_REPORT="$LOG_DIR/sysdiag_report.html"
 JSON_REPORT="$LOG_DIR/sysdiag_summary.json"
+CSV_REPORT="$LOG_DIR/sysdiag_summary.csv"
+MD_REPORT="$LOG_DIR/sysdiag_summary.md"
 SVG_REPORT="$LOG_DIR/sysdiag_status.svg"
 
 GREEN="\033[0;32m"
@@ -31,6 +33,15 @@ status_icon() {
   esac
 }
 
+detect_issues_summary() {
+  echo "<h2>⚠️ Detected Issues</h2><ul>" >> "$HTML_REPORT"
+  echo "$TEST_LOGS" | grep -q "SGX disabled by BIOS" && echo "<li><b>BIOS:</b> SGX disabled by BIOS</li>" >> "$HTML_REPORT"
+  echo "$TEST_LOGS" | grep -q "VMX.*disabled by BIOS" && echo "<li><b>BIOS:</b> VMX (Virtualization) disabled</li>" >> "$HTML_REPORT"
+  echo "$TEST_LOGS" | grep -qi "gnome-keyring.*Failed to start" && echo "<li><b>GNOME:</b> keyring services failed to start</li>" >> "$HTML_REPORT"
+  echo "$TEST_LOGS" | grep -qi "bluetooth.*failed" && echo "<li><b>Bluetooth:</b> driver or service initialization failed</li>" >> "$HTML_REPORT"
+  echo "</ul>" >> "$HTML_REPORT"
+}
+
 run_test() {
   label="$1"
   cmd="$2"
@@ -51,24 +62,13 @@ run_test() {
   note="Success"
   if echo "$label" | grep -q "System Logs"; then
     ERRORS=$(echo "$result" | grep -iE "fail|error|denied|assertion" | wc -l)
-    if [ "$ERRORS" -gt 0 ]; then
-      note="$ERRORS critical messages"
-      status=1
-    fi
+    [ "$ERRORS" -gt 0 ] && note="$ERRORS critical messages" && status=1
   fi
   if echo "$label" | grep -q "Driver Errors"; then
-    if echo "$result" | grep -qi "Operation not permitted"; then
-      note="Permission denied"
-      status=1
-    fi
+    echo "$result" | grep -qi "Operation not permitted" && note="Permission denied" && status=1
   fi
-  if [ "$status" -eq 0 ]; then
-    echo "$(status_icon OK) (${duration}s)"
-    TEST_SUMMARY="${TEST_SUMMARY}${label},OK,$duration,$note\n"
-  else
-    echo "$(status_icon WARN) (${duration}s)"
-    TEST_SUMMARY="${TEST_SUMMARY}${label},WARN,$duration,$note\n"
-  fi
+  [ "$status" -eq 0 ] && TEST_SUMMARY="${TEST_SUMMARY}${label},OK,$duration,$note\n" || TEST_SUMMARY="${TEST_SUMMARY}${label},WARN,$duration,$note\n"
+  [ "$status" -eq 0 ] && echo "$(status_icon OK) (${duration}s)" || echo "$(status_icon WARN) (${duration}s)"
   echo "${CYAN}--------------------------------------------------${RESET}"
   echo "--- $label ---\n$result\n" >> "$LOG_FILE"
   TEST_LOGS="${TEST_LOGS}--- $label ---\n$result\n\n"
@@ -78,8 +78,9 @@ run_test() {
 generate_exports() {
   echo "<html><head><title>SysDiag Report</title><style>body{font-family:monospace;background:#111;color:#eee;padding:20px;} a{color:#4fc3f7;} summary{cursor:pointer;font-weight:bold;} pre{background:#222;padding:10px;border-left:4px solid #4fc3f7;}</style></head><body>" > "$HTML_REPORT"
   echo "<h1>🔍 SysDiag Report</h1><p><b>Date:</b> $(date)</p>" >> "$HTML_REPORT"
-ERROR_COUNT=$(echo "$TEST_SUMMARY" | grep -c ",FAIL,\|,WARN,")
-echo "<p style=\"color:#ff9800;\"><b>Warnings/Errors Detected:</b> $ERROR_COUNT</p><hr>" >> "$HTML_REPORT"
+  detect_issues_summary
+  ERRORS=$(echo "$TEST_SUMMARY" | grep -c ",FAIL,\|,WARN,")
+  echo "<p style=\"color:#ff9800;\"><b>Warnings/Errors Detected:</b> $ERRORS</p><hr>" >> "$HTML_REPORT"
 
   echo "$TEST_LOGS" | awk -v RS="--- " 'NR>1 {
     split($0, lines, "\n")
@@ -89,15 +90,28 @@ echo "<p style=\"color:#ff9800;\"><b>Warnings/Errors Detected:</b> $ERROR_COUNT<
     printf "<details><summary>--- %s</summary><pre>%s</pre></details>\n", summary, body
   }' >> "$HTML_REPORT"
 
-  echo "<hr><p>Links: <a href='file://$JSON_REPORT'>JSON</a> • <a href='file://$SVG_REPORT'>SVG</a> • <a href='file://$HTML_REPORT'>HTML</a></p>" >> "$HTML_REPORT"
+  echo "<hr><p>Links: <a href='file://$JSON_REPORT'>JSON</a> 
   echo "</body></html>" >> "$HTML_REPORT"
 
   echo "[" > "$JSON_REPORT"
   echo "$TEST_SUMMARY" | while IFS=',' read -r name status time note; do
-    echo "  { "test": "$name", "status": "$status", "duration": "$time", "note": "$note" }," >> "$JSON_REPORT"
+    echo "  { \"test\": \"$name\", \"status\": \"$status\", \"duration\": \"$time\", \"note\": \"$note\" }," >> "$JSON_REPORT"
   done
   sed -i '$ s/,$//' "$JSON_REPORT"
   echo "]" >> "$JSON_REPORT"
+
+  echo "test,status,duration,note" > "$CSV_REPORT"
+  echo "$TEST_SUMMARY" | while IFS=',' read -r name status time note; do
+    echo "$name,$status,$time,$note" >> "$CSV_REPORT"
+  done
+
+  echo "# 🧪 SysDiag Report — $(date)" > "$MD_REPORT"
+  echo "" >> "$MD_REPORT"
+  echo "| Test | Status | Duration | Note |" >> "$MD_REPORT"
+  echo "|------|--------|----------|------|" >> "$MD_REPORT"
+  echo "$TEST_SUMMARY" | while IFS=',' read -r name status time note; do
+    echo "| $name | $status | ${time}s | $note |" >> "$MD_REPORT"
+  done
 
   echo "<svg xmlns='http://www.w3.org/2000/svg' width='500' height='200'>" > "$SVG_REPORT"
   y=20
@@ -113,7 +127,7 @@ echo "<p style=\"color:#ff9800;\"><b>Warnings/Errors Detected:</b> $ERROR_COUNT<
 }
 
 main() {
-  echo "${BOLD}🧪 SysDiag v1.1.1 — Enhanced Diagnostics Toolkit${RESET}"
+  echo "${BOLD}🧪 SysDiag v1.2.0 — Advanced Diagnostics Toolkit${RESET}"
   echo "📂 Output directory: $LOG_DIR"
   echo ""
   echo "${BOLD}Starting full system diagnostics...${RESET}"
@@ -153,7 +167,6 @@ main() {
   echo "${YELLOW}⚠️ Total warnings/errors: $ERRORS_TOTAL${RESET}"
   echo "📄 HTML: ${BLUE}file://$HTML_REPORT${RESET}"
   echo "📥 JSON: ${BLUE}$JSON_REPORT${RESET}"
-  echo "📈 SVG: ${BLUE}$SVG_REPORT${RESET}"
   echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 }
 
