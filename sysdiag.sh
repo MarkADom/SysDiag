@@ -2,15 +2,20 @@
 
 # 🧪 SysDiag v1.2.1 - Linux Diagnostics Toolkit (with log analysis, HTML export, and issue summary)
 
+# Author: Marco Domingues (@MarkADom / SynchLabs)
+# License: MIT
+#
+# Description:
+#   SysDiag is an Linux Diagnostics Toolkit, a CLI tool for diagnosing Linux systems.
+#   It performs hardware checks, stress tests, log analysis, and exports structured reports.
+#
+
 LOG_DIR="$HOME/.local/share/sysdiag"
 mkdir -p "$LOG_DIR"
 DATESTAMP=$(date +%F_%H-%M-%S)
 LOG_FILE="$LOG_DIR/sysdiag_$DATESTAMP.log"
 HTML_REPORT="$LOG_DIR/sysdiag_report.html"
 JSON_REPORT="$LOG_DIR/sysdiag_summary.json"
-CSV_REPORT="$LOG_DIR/sysdiag_summary.csv"
-MD_REPORT="$LOG_DIR/sysdiag_summary.md"
-SVG_REPORT="$LOG_DIR/sysdiag_status.svg"
 
 GREEN="\033[0;32m"
 RED="\033[0;31m"
@@ -71,16 +76,24 @@ run_test() {
   end=$(date +%s.%N)
   duration=$(echo "$end - $start" | bc -l | xargs printf "%.2f")
   note="Success"
+  test_status="OK"
   if echo "$label" | grep -q "System Logs"; then
     ERRORS=$(echo "$result" | grep -iE "fail|error|denied|assertion" | wc -l)
-    [ "$ERRORS" -gt 0 ] && note="$ERRORS critical messages" && status=1
+    if [ "$ERRORS" -gt 0 ]; then
+      note="$ERRORS critical messages"
+      test_status="WARN"
+    fi
+  elif echo "$label" | grep -q "Driver Errors"; then
+    if echo "$result" | grep -qi "Operation not permitted"; then
+      note="Permission denied"
+      test_status="WARN"
+    fi
+  elif [ "$status" -ne 0 ]; then
+    test_status="WARN"
   fi
-  if echo "$label" | grep -q "Driver Errors"; then
-    echo "$result" | grep -qi "Operation not permitted" && note="Permission denied" && status=1
-  fi
-  [ "$status" -eq 0 ] && echo "$(status_icon OK) (${duration}s)" || echo "$(status_icon WARN) (${duration}s)"
+  echo "$(status_icon $test_status) (${duration}s)"
   echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  TEST_SUMMARY="${TEST_SUMMARY}${label},${status:+WARN},$duration,$note\n"
+  TEST_SUMMARY="${TEST_SUMMARY}${label},$test_status,$duration,$note\n"
   echo "--- $label ---\n$result\n" >> "$LOG_FILE"
   TEST_LOGS="${TEST_LOGS}--- $label ---\n$result\n\n"
   echo "$result"
@@ -148,8 +161,10 @@ main() {
   run_test "Temperatures" "sensors" true
   run_test "GPU Info" "lshw -C display" true
   if command -v nvidia-smi >/dev/null; then run_test "GPU Temperature" "nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader" true; else run_test "GPU Temperature" "echo 'nvidia-smi not available'" false; fi
-  run_test "RAM Stress" "stress-ng --vm 1 --vm-bytes 75% --timeout 10s --metrics-brief" true
-  run_test "CPU Stress" "stress --cpu 4 --timeout 10s" true
+  CORES=$(nproc)
+  RAM_MB=$(free -m | awk '/^Mem:/{print int($2 * 0.75)}')
+  run_test "RAM Stress" "stress-ng --vm 1 --vm-bytes ${RAM_MB}M --timeout 10s --metrics-brief" true
+  run_test "CPU Stress" "stress --cpu $CORES --timeout 10s" true
   run_test "GPU Benchmark" "glmark2 | grep Score" true
   run_test "Network Ping" "ping -c 4 8.8.8.8" true
   run_test "DNS Resolution" "dig +short google.com" true
@@ -169,6 +184,7 @@ main() {
   ERRORS_TOTAL=$(echo "$TEST_SUMMARY" | grep -c ",FAIL,\|,WARN,")
   echo "${YELLOW}⚠️ Total warnings/errors: $ERRORS_TOTAL${RESET}"
   echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo ""
   echo "📄 HTML: ${BLUE}file://$HTML_REPORT${RESET}"
   echo "📥 JSON: ${BLUE}$JSON_REPORT${RESET}"
   echo "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"

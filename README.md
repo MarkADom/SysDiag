@@ -1,4 +1,4 @@
-# 🧪 SysDiag v1.2.0 – Linux System Diagnostic
+# 🧪 SysDiag – Linux System Diagnostic
 
 **SysDiag** is a diagnostic tool for Linux systems, developed by **Marco Domingues / SynchLabs**. It provides a modern CLI experience, auto-reporting, issue detection, and export functionality — all without requiring root access.
 
