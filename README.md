@@ -1,54 +1,60 @@
 # 🧪 SysDiag v1.2.0 – Linux System Diagnostic
 
-**SysDiag** is a diagnostic tool for Linux systems, developed by **Marco Domingues / SynchLabs**. It offers a rich and modern terminal experience, automatic reporting, and no need for root — making it ideal for developers, sysadmins, and power users who want **clear, actionable insights** into system health.
+**SysDiag** is a diagnostic tool for Linux systems, developed by **Marco Domingues / SynchLabs**. It provides a modern CLI experience, auto-reporting, issue detection, and export functionality — all without requiring root access.
 
 ---
 
 ## 🚀 Features
 
-- ✅ **Dependency check** with optional auto-install
-- 🌡️ **Sensor readings**: CPU, GPU temperatures via `sensors`, `nvidia-smi`
-- 🧠 **Comprehensive diagnostics**: hardware, CPU, RAM, disk, network, GPU, drivers
-- 🔥 **Real stress tests**: CPU and RAM (`stress`, `stress-ng`)
-- 🧩 **Log analysis**: detects BIOS issues, GNOME errors, Bluetooth and kernel driver problems
-- 🧾 **Detailed summary per test**: status, duration and notes
-- 📊 **Auto-exported reports**:
-  - `HTML`: visually rich with collapsible logs and issue summary
-  - `JSON`: structured data for automation
-  - `CSV`: spreadsheet compatible
-  - `Markdown`: GitHub-ready test summary
-  - `SVG`: graphical status overview
-- 🧭 End-of-run **terminal summary** with icons and timings
-- ❌ **No root required** for diagnostics (except optional sensor-level adjustments)
+- ✅ **Dependency check** with optional install prompt
+- 🌡️ **Temperature readings**: CPU, GPU sensors (`sensors`, `nvidia-smi`)
+- 🧠 **Diagnostics**: CPU, RAM, disk, GPU, network, drivers, logs
+- 🔥 **Real stress tests** for CPU/RAM (`stress`, `stress-ng`)
+- 🧩 **Log analysis** with issue detection for:
+  - BIOS misconfigurations (`SGX`, `VMX`)
+  - GNOME session/keyring failures
+  - Bluetooth and driver problems
+- 📋 **Detailed test summary** with icons, duration, and notes
+- 📊 **Export formats**:
+  - `HTML`: full visual report with collapsible logs
+  - `JSON`: includes date, error count, and test list
+  - `CSV`: spreadsheet-friendly
+  - `Markdown`: GitHub-friendly table
+  - `SVG`: graphical summary
+- ⚠️ **Issues section shown in terminal summary**
+- ❌ **No root required** — fully functional without `sudo`
 
 ---
 
 ## 📦 Dependencies
 
-SysDiag relies on several reliable tools for real diagnostics:
+| Tool         | Purpose                           |
+|--------------|-----------------------------------|
+| `sensors`    | CPU/GPU temperature sensors       |
+| `stress`     | Stress test for CPU and RAM       |
+| `glmark2`    | GPU benchmarking                  |
+| `lshw`       | Hardware overview                 |
+| `lscpu`      | CPU info                          |
+| `lsblk`      | Disk and partition details        |
+| `dmidecode`  | BIOS, memory, vendor info         |
 
-| Command      | Purpose                          |
-|--------------|----------------------------------|
-| `sensors`    | Temperature sensors              |
-| `stress`     | CPU & RAM stress testing         |
-| `glmark2`    | GPU benchmarking                 |
-| `lshw`       | Hardware inventory               |
-| `lscpu`      | CPU information                  |
-| `lsblk`      | Disk and partition info          |
-| `dmidecode`  | BIOS, memory, manufacturer info  |
-
-### 📥 Install Manually (Debian/Ubuntu)
+### Install manually (Debian/Ubuntu)
 
 ```bash
 sudo apt update
 sudo apt install lm-sensors stress glmark2 lshw lscpu lsblk dmidecode -y
 ```
 
+### Remove manually (Debian/Ubuntu)
+```bash
+sudo apt remove --purge lm-sensors stress glmark2 lshw dmidecode -y
+```
+
 ---
 
-## 📁 Output Files
+## 📁 Output Location
 
-Default output location:
+All reports are saved in:
 
 ```bash
 ~/.local/share/sysdiag/
@@ -56,38 +62,36 @@ Default output location:
 
 | File Name                          | Description                            |
 |------------------------------------|----------------------------------------|
-| `sysdiag_report.html`              | Full HTML report with collapsible logs |
-| `sysdiag_summary.json`             | Test results in JSON                   |
-| `sysdiag_summary.csv`              | Tabular export for Excel/Sheets        |
-| `sysdiag_summary.md`               | Markdown-formatted test table          |
-| `sysdiag_status.svg`               | SVG visual summary                     |
-| `sysdiag_YYYY-MM-DD_HH-MM-SS.log`  | Full raw logs per test                 |
+| `sysdiag_report.html`              | HTML report (collapsible logs)         |
+| `sysdiag_summary.json`             | JSON with date, error count, summary   |
+| `sysdiag_summary.csv`              | Spreadsheet-friendly CSV               |
+| `sysdiag_summary.md`               | Markdown-formatted table               |
+| `sysdiag_status.svg`               | Color-coded SVG overview               |
+| `sysdiag_YYYY-MM-DD_HH-MM-SS.log`  | Full plain text logs                   |
 
 ---
 
-## 🧠 Issue Detection (v1.2.0+)
+## ⚠️ JSON Example (v1.2.0)
 
-SysDiag intelligently flags potential issues like:
-
-- ⚠️ BIOS misconfiguration (`SGX` or `VMX` disabled)
-- ⚠️ GNOME keyring and session problems
-- ⚠️ Bluetooth driver/service failures
-- ⚠️ Kernel `dmesg` restrictions or warnings
-
----
-
-## 🧪 Example Output
-
-```text
-🧾 SYS DIAG TEST SUMMARY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-▶ CPU Info           ✅ OK       (0.2s)
-▶ RAM Info           ✅ OK       (0.1s)
-▶ Disk Info          ✅ OK       (0.3s)
-▶ Temp Sensors       ⚠️ Warning  (0.6s)  CPU 88°C
-▶ GPU Benchmark      ⏭️ Skipped  (0.0s)  glmark2 not installed
-▶ System Logs        ⚠️ Warning  (0.4s)  3 critical messages
-▶ Driver Errors      ⚠️ Warning  (0.1s)  Permission denied
+```json
+{
+  "date": "Wed May 21 12:00:00 2025",
+  "errors": 2,
+  "summary": [
+    {
+      "test": "GPU Benchmark",
+      "status": "SKIP",
+      "duration": "0.00",
+      "note": "Skipped"
+    },
+    {
+      "test": "Driver Errors",
+      "status": "WARN",
+      "duration": "0.01",
+      "note": "Permission denied"
+    }
+  ]
+}
 ```
 
 ---
@@ -99,16 +103,10 @@ chmod +x sysdiag.sh
 ./sysdiag.sh
 ```
 
-> ⚠️ SysDiag runs fully without root. Only `dmesg` access may require permission tuning:
+> ⚠️ If `dmesg` access fails:
 > ```bash
 > sudo sysctl -w kernel.dmesg_restrict=0
 > ```
-
----
-
-## 📸 Screenshot
-
-![Report Preview](docs/screenshot-report.png)
 
 ---
 
